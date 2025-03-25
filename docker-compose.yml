@@ -1,5 +1,4 @@
 # WORK IN PROGRESS
-version: '3.8'
 services:
   ollama-tg:
     build: .
@@ -15,20 +14,17 @@ services:
     container_name: ollama-server
     volumes:
       - ./ollama:/root/.ollama
-    
-    # Uncomment to enable NVIDIA GPU
-    # Otherwise runs on CPU only:
 
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
     restart: always
     ports:
-      - '11434:11434'
+      - '11440:11434'
 volumes:
   ollama-tg:
