@@ -16,6 +16,7 @@ admin_ids = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
 ollama_base_url = os.getenv("OLLAMA_BASE_URL")
 ollama_port = os.getenv("OLLAMA_PORT", "11434")
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
+keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "0")
 allow_all_users_in_groups = bool(int(os.getenv("ALLOW_ALL_USERS_IN_GROUPS", "0")))
 log_levels = list(logging._levelToName.values())
 timeout = os.getenv("TIMEOUT", "3000")
@@ -108,7 +109,8 @@ async def generate(payload: dict, modelname: str, prompt: str):
         ollama_payload = {
             "model": modelname,
             "messages": payload.get("messages", []),
-            "stream": payload.get("stream", True)
+            "stream": payload.get("stream", True),
+            "keep_alive": keep_alive
         }
 
         try:
