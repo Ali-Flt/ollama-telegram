@@ -28,6 +28,7 @@ Here's features that you get out of the box:
 - [ ] Add more API-related functions [System Prompt Editor, Ollama Version fetcher, etc.]
 - [ ] Redis DB integration
 - [ ] Update bot UI
+- [x] Add voice message support via OpenAI Whisper
 
 ## Prerequisites
 - [Telegram-Bot Token](https://core.telegram.org/bots#6-botfather)

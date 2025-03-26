@@ -8,7 +8,6 @@ ARG PYTHONPATH_=${APPHOMEDIR}
 
 WORKDIR /${APPHOMEDIR}
 
-COPY requirements.txt requirements.txt
 COPY ./bot /${APPHOMEDIR}
 
 # Configure app home directory
@@ -21,7 +20,13 @@ RUN \
 RUN \
     apk add --no-cache gcc g++ \
     && python -m pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir \
+        python-dotenv==1.1.0 \
+        aiogram==3.19.0 \
+        ollama==0.4.7 \
+        telegramify-markdown==0.5.0 \
+        typing \
+        requests==2.32.3 \
     && apk del --no-cache gcc g++
 
 USER ${USERNAME}

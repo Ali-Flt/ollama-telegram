@@ -9,10 +9,10 @@ RUN apt-get update && \
 
 # Install faster-whisper with specific version for compatibility
 RUN pip install --no-cache-dir \
-    faster-whisper==0.10.0 \
-    fastapi==0.109.0 \
-    uvicorn==0.27.0 \
-    python-multipart==0.0.6
+    faster-whisper==1.1.1 \
+    fastapi==0.115.12 \
+    uvicorn==0.34.0 \
+    python-multipart==0.0.20
 
 # Copy the API server
 COPY ./whisper /app/
