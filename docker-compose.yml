@@ -1,7 +1,9 @@
 # WORK IN PROGRESS
 services:
   ollama-tg:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama-tg
     container_name: ollama-tg
     restart: on-failure
     env_file:
@@ -14,7 +16,6 @@ services:
     container_name: ollama-server
     volumes:
       - ./ollama:/root/.ollama
-
     deploy:
       resources:
         reservations:
@@ -22,9 +23,27 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    restart: on-failure
 
-    restart: always
-    ports:
-      - '11440:11434'
+  faster-whisper:
+    build:
+      context: .
+      dockerfile: Dockerfile.faster-whisper
+    environment:
+      - MODEL_SIZE=small  # or medium, large-v2, etc.
+      - DEVICE=cpu  # change to cuda if using GPU
+      - COMPUTE_TYPE=int8
+    volumes:
+      - whisper-models:/root/.cache/huggingface/hub
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: on-failure
+
 volumes:
   ollama-tg:
+  whisper-models:

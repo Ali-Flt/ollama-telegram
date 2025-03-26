@@ -6,13 +6,19 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import telegramify_markdown
 import telegramify_markdown.customize as customize
 customize.strict_markdown = False
-
+import tempfile
+from pathlib import Path
 from func.interactions import *
 import asyncio
 import traceback
 import io
 import base64
 import sqlite3
+import os
+import requests
+from requests.exceptions import RequestException
+
+whisper_url = os.getenv("WHISPER_SERVICE_URL")
 bot = Bot(token=token)
 dp = Dispatcher()
 start_kb = InlineKeyboardBuilder()
@@ -88,6 +94,20 @@ def save_chat_message(user_id, role, content):
               (user_id, role, content))
     conn.commit()
     conn.close()
+
+def transcribe_audio(audio_path: str) -> dict:
+    try:
+        with open(audio_path, 'rb') as f:
+            response = requests.post(
+                f"{whisper_url}/transcribe",
+                files={'file': (os.path.basename(audio_path), f)}
+            )
+        response.raise_for_status()
+        return response.json()
+    except RequestException as e:
+        print(f"Error communicating with whisper service: {e}")
+        return None
+
 
 @dp.callback_query(lambda query: query.data == "register")
 async def register_callback_handler(query: types.CallbackQuery):
@@ -474,6 +494,16 @@ async def ollama_request(message: types.Message, prompt: str = None):
                 if system_prompt is None:
                     logging.warning(f"Selected prompt ID {selected_prompt_id} not found for user {message.from_user.id}")
 
+        if message.content_type == "voice":
+            voice = message.voice
+            with tempfile.TemporaryDirectory() as temp_dir:
+                file = await bot.get_file(voice.file_id)
+                file_path = Path(temp_dir) / f"{voice.file_unique_id}.ogg"                
+                await bot.download_file(file.file_path, str(file_path))
+                result = transcribe_audio(file_path)
+            prompt = result.get('transcription', 'No transcription available')
+            logging.info(f"Voice prompt: {prompt}")
+            
         # Save the user's message
         save_chat_message(message.from_user.id, "user", prompt)
 
