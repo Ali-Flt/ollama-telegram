@@ -18,6 +18,8 @@ logging.basicConfig(level=log_level)
 
 cuda = os.getenv("USE_CUDA", "False")
 VOICE_MODEL = os.getenv("PIPER_VOICE", "en_US-lessac-medium")
+VOICE_LANG_1 = VOICE_MODEL.split('_')[0]
+VOICE_LANG_2 = VOICE_MODEL.split('-')[0]
 VOICE_NAME = VOICE_MODEL.split('-')[1]
 VOICE_STYLE = VOICE_MODEL.split('-')[-1]
 VOICE_MODEL += ".onnx"
@@ -30,12 +32,12 @@ try:
         logging.info(f"Downloading voice model {VOICE_MODEL}...")
         MODEL_PATH.parent.mkdir(exist_ok=True)
         import requests
-        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}"
+        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{VOICE_LANG_1}/{VOICE_LANG_2}/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}"
         response = requests.get(url)
         response.raise_for_status()
         with open(MODEL_PATH, "wb") as f:
             f.write(response.content)
-        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}.json"
+        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{VOICE_LANG_1}/{VOICE_LANG_2}/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}.json"
         response = requests.get(url)
         response.raise_for_status()
         with open(JSON_PATH, "wb") as f:

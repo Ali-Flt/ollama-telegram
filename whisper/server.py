@@ -13,9 +13,9 @@ log_level = logging.getLevelName(log_level_str)
 logging.basicConfig(level=log_level)
 
 # Load configuration from environment
-model_size = os.getenv("MODEL_SIZE", "small")
-device = os.getenv("DEVICE", "cpu")
-compute_type = os.getenv("COMPUTE_TYPE", "int8")
+model_size = os.getenv("WHISPER_MODEL_SIZE", "small")
+device = os.getenv("WHISPER_DEVICE", "cpu")
+compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
 def transcribe(temp_path: str, model_size: str, device: str, compute_type: str):
     """Function to run in separate process for transcription"""

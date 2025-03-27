@@ -29,10 +29,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.faster-whisper
-    environment:
-      - MODEL_SIZE=large-v3
-      - DEVICE=cuda  # cpu / cuda
-      - COMPUTE_TYPE=int8
     volumes:
       - whisper-models:/root/.cache/huggingface/hub
     deploy:
@@ -52,7 +48,6 @@ services:
       dockerfile: Dockerfile.piper-tts
     container_name: piper-tts
     environment:
-      - PIPER_VOICE=en_US-ryan-high
       - PIPER_DATA_DIR=/app/voices
     volumes:
       - tts-voices:/app/voices
