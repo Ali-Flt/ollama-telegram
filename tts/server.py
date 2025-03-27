@@ -12,8 +12,9 @@ from pydub import AudioSegment
 
 app = FastAPI(title="Piper TTS Server", version="1.0")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+log_level_str = os.getenv("LOG_LEVEL", "INFO")
+log_level = logging.getLevelName(log_level_str)
+logging.basicConfig(level=log_level)
 
 cuda = os.getenv("USE_CUDA", "False")
 VOICE_MODEL = os.getenv("PIPER_VOICE", "en_US-lessac-medium")
@@ -26,7 +27,7 @@ JSON_PATH = Path(DATA_DIR) / f"{VOICE_MODEL}.json"
 
 try:
     if not (MODEL_PATH.exists() and JSON_PATH.exists()) :
-        logger.info(f"Downloading voice model {VOICE_MODEL}...")
+        logging.info(f"Downloading voice model {VOICE_MODEL}...")
         MODEL_PATH.parent.mkdir(exist_ok=True)
         import requests
         url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}"
@@ -40,7 +41,7 @@ try:
         with open(JSON_PATH, "wb") as f:
             f.write(response.content)
 except Exception as e:
-    logger.error(f"Failed to initialize voice model: {e}")
+    logging.error(f"Failed to initialize voice model: {e}")
     raise
 
 def tts_worker(output_path, voice_path, text):
@@ -122,7 +123,7 @@ async def synthesize(text: str):
             }
         )
     except Exception as e:
-        logger.error(f"Synthesis failed: {e}")
+        logging.error(f"Synthesis failed: {e}")
         raise HTTPException(status_code=500, detail="Speech synthesis failed")
 
 @app.get("/health")

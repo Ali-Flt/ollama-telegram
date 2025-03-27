@@ -5,11 +5,11 @@ services:
       context: .
       dockerfile: Dockerfile.ollama-tg
     container_name: ollama-tg
+    volumes:
+      - ollama-tg:/code/  # Mounting a volume for SQLite database
     restart: on-failure
     env_file:
       - ./.env
-    volumes:
-      - ollama-tg:/code/  # Mounting a volume for SQLite database
 
   ollama-api:
     image: ollama/ollama:latest
@@ -43,6 +43,8 @@ services:
               count: all
               capabilities: [gpu]
     restart: on-failure
+    env_file:
+      - ./.env
 
   piper-tts:
     build:
@@ -62,6 +64,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    env_file:
+      - ./.env
 
 volumes:
   ollama-tg:

@@ -8,9 +8,9 @@ import uuid
 
 app = FastAPI()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+log_level_str = os.getenv("LOG_LEVEL", "INFO")
+log_level = logging.getLevelName(log_level_str)
+logging.basicConfig(level=log_level)
 
 # Load configuration from environment
 model_size = os.getenv("MODEL_SIZE", "small")
@@ -54,12 +54,12 @@ async def transcribe_audio(file: Annotated[UploadFile, File(description="Audio f
         temp_path = f"/tmp/whisper/{uuid.uuid4()}_{file.filename}"
         with open(temp_path, "wb") as f:
             f.write(await file.read())
-        logger.info(f"Transcribing file: {file.filename}")
+        logging.info(f"Transcribing file: {file.filename}")
         result = run_transcribe(temp_path, model_size, device, compute_type)
         os.remove(temp_path)
         return result
 
     except Exception as e:
-        logger.error(f"Transcription failed: {str(e)}")
+        logging.error(f"Transcription failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
