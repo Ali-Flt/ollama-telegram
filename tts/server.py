@@ -52,7 +52,7 @@ def tts_worker(output_path, voice_path, text):
         with open(output_path, 'w') as f:
             f.write(f"ERROR: {str(e)}")
 
-def convert_wav_to_ogg(input_wav_path, output_ogg_path=None, quality=10):
+def convert_wav_to_ogg(input_wav_path, output_ogg_path=None):
     if not os.path.exists(input_wav_path):
         raise FileNotFoundError(f"Input file not found: {input_wav_path}")
     if output_ogg_path is None:
@@ -60,7 +60,7 @@ def convert_wav_to_ogg(input_wav_path, output_ogg_path=None, quality=10):
         output_ogg_path = f"{base_path}.ogg"
     try:
         audio = AudioSegment.from_wav(input_wav_path)
-        audio.export(output_ogg_path, format='ogg', codec='libvorbis', parameters=['-q:a', str(quality)])
+        audio.export(output_ogg_path, format='ogg', codec="opus", bitrate="48k", parameters=['-strict', '-2'])
         return output_ogg_path
     except Exception as e:
         raise Exception(f"Failed to convert WAV to OGG: {str(e)}")
