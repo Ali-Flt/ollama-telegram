@@ -1,10 +1,10 @@
-FROM python:3.12-slim
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y ffmpeg git && \
+    apt-get install -y ffmpeg python3.9 python3-pip git && \
     rm -rf /var/lib/apt/lists/*
 
 # Install faster-whisper with specific version for compatibility
@@ -12,8 +12,8 @@ RUN pip install --no-cache-dir \
     faster-whisper==1.1.1 \
     fastapi==0.115.12 \
     uvicorn==0.34.0 \
-    python-multipart==0.0.20
-
+    python-multipart==0.0.20 \
+    ctranslate2==4.4.0
 # Copy the API server
 COPY ./whisper /app/
-CMD ["uvicorn", "whisper_server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -30,8 +30,8 @@ services:
       context: .
       dockerfile: Dockerfile.faster-whisper
     environment:
-      - MODEL_SIZE=small  # or medium, large-v2, etc.
-      - DEVICE=cpu  # change to cuda if using GPU
+      - MODEL_SIZE=large-v3
+      - DEVICE=cuda  # cpu / cuda
       - COMPUTE_TYPE=int8
     volumes:
       - whisper-models:/root/.cache/huggingface/hub
@@ -44,6 +44,26 @@ services:
               capabilities: [gpu]
     restart: on-failure
 
+  piper-tts:
+    build:
+      context: .
+      dockerfile: Dockerfile.piper-tts
+    container_name: piper-tts
+    environment:
+      - PIPER_VOICE=en_US-ryan-high
+      - PIPER_DATA_DIR=/app/voices
+    volumes:
+      - tts-voices:/app/voices
+    restart: on-failure
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   ollama-tg:
   whisper-models:
+  tts-voices:

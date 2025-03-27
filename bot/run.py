@@ -2,6 +2,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.filters.command import Command, CommandStart
 from aiogram.types import Message
+from aiogram.types import FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import telegramify_markdown
 import telegramify_markdown.customize as customize
@@ -18,7 +19,9 @@ import os
 import requests
 from requests.exceptions import RequestException
 
+
 whisper_url = os.getenv("WHISPER_SERVICE_URL")
+tts_url = os.getenv("TTS_SERVICE_URL")
 bot = Bot(token=token)
 dp = Dispatcher()
 start_kb = InlineKeyboardBuilder()
@@ -108,6 +111,16 @@ def transcribe_audio(audio_path: str) -> dict:
         print(f"Error communicating with whisper service: {e}")
         return None
 
+def text_to_speech(text: str, output_file: str = "output.wav"):
+    response = requests.get(
+        f"{tts_url}/synthesize",
+        params={"text": text},
+        stream=True
+    )
+    response.raise_for_status()
+    with open(output_file, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
 
 @dp.callback_query(lambda query: query.data == "register")
 async def register_callback_handler(query: types.CallbackQuery):
@@ -438,8 +451,7 @@ async def handle_response(message, response_data, full_response):
     if full_response_stripped == "":
         return
     if response_data.get("done"):
-        text = f"{full_response_stripped}\n\n⚙️ {modelname}\nGenerated in {response_data.get('total_duration') / 1e9:.2f}s."
-        await send_response(message, text)
+        await send_response(message, full_response_stripped, response_data)
         async with ACTIVE_CHATS_LOCK:
             if ACTIVE_CHATS.get(message.from_user.id) is not None:
                 ACTIVE_CHATS[message.from_user.id]["messages"].append(
@@ -451,24 +463,34 @@ async def handle_response(message, response_data, full_response):
         return True
     return False
 
-async def send_response(message, text):
-    # Escape Markdown special characters to prevent formatting issues
-    text = telegramify_markdown.markdownify(text)
-
-    # A negative message.chat.id is a group message
-    if message.chat.id < 0 or message.chat.id == message.from_user.id:
-        await bot.send_message(
-            chat_id=message.chat.id,
-            text=text,
-            parse_mode="MarkdownV2"
-        )
+async def send_response(message, full_response_stripped, response_data):
+    if message.content_type == "voice":
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "response.ogg")
+            text_to_speech(full_response_stripped, file_path)
+            voice_msg = FSInputFile(file_path)
+            await bot.send_voice(
+                chat_id=message.chat.id,
+                voice=voice_msg,
+            )
     else:
-        await bot.edit_message_text(
-            chat_id=message.chat.id,
-            message_id=message.message_id,
-            text=text,
-            parse_mode="MarkdownV2"
-        )
+        text = f"{full_response_stripped}\n\n⚙️ {modelname}\nGenerated in {response_data.get('total_duration') / 1e9:.2f}s."
+        # Escape Markdown special characters to prevent formatting issues
+        text = telegramify_markdown.markdownify(text)
+        # A negative message.chat.id is a group message
+        if message.chat.id < 0 or message.chat.id == message.from_user.id:
+            await bot.send_message(
+                chat_id=message.chat.id,
+                text=text,
+                parse_mode="MarkdownV2"
+            )
+        else:
+            await bot.edit_message_text(
+                chat_id=message.chat.id,
+                message_id=message.message_id,
+                text=text,
+                parse_mode="MarkdownV2"
+            )
 
 async def ollama_request(message: types.Message, prompt: str = None):
     try:

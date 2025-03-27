@@ -1,0 +1,36 @@
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    espeak-ng \
+    libsndfile1 \
+    wget \
+    python3.9 \
+    python3-pip \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --no-deps piper-tts 
+RUN pip install --no-cache-dir fastapi \
+    "uvicorn[standard]" \
+    piper-phonemize-cross \
+    onnxruntime-gpu \
+    numpy \
+    requests \
+    pydub
+
+# Create app directory
+WORKDIR /app
+
+# Copy server script
+COPY ./tts /app/
+
+# Create voice directory
+RUN mkdir -p /app/voices
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["python3", "server.py"]

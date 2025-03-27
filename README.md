@@ -29,6 +29,7 @@ Here's features that you get out of the box:
 - [ ] Redis DB integration
 - [ ] Update bot UI
 - [x] Add voice message support via OpenAI Whisper
+- [x] Add speech to speech support via OpenAI Whisper and Piper TTS
 
 ## Prerequisites
 - [Telegram-Bot Token](https://core.telegram.org/bots#6-botfather)
