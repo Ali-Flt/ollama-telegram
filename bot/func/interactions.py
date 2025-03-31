@@ -4,6 +4,7 @@ import os
 import aiohttp
 import json
 import sqlite3
+from typing import Union
 from aiogram import types
 from aiohttp import ClientTimeout
 from asyncio import Lock
@@ -175,54 +176,67 @@ def remove_user_from_db(user_id):
 
 def perms_allowed(func):
     @wraps(func)
-    async def wrapper(message: types.Message = None, query: types.CallbackQuery = None):
-        user_id = message.from_user.id if message else query.from_user.id
-        if user_id in admin_ids or user_id in allowed_ids:
-            if message:
-                return await func(message)
-            elif query:
-                return await func(query=query)
+    async def wrapper(update: Union[types.Message, types.CallbackQuery]):
+        if isinstance(update, types.CallbackQuery):
+            message = update.message
+            query = update
         else:
+            message = update
+            query = None
+        user_id = query.from_user.id if query else message.from_user.id
+        if user_id in admin_ids or user_id in allowed_ids:
+            if query:
+                return await func(query=query)
+            elif message:
+                return await func(message)
+        else: 
+            if query:
+                if message:
+                    if message.chat.type in ["supergroup", "group"]:
+                        return
+                await query.answer("Access Denied")
             if message:
-                if message and message.chat.type in ["supergroup", "group"]:
+                if message.chat.type in ["supergroup", "group"]:
                     if allow_all_users_in_groups:
                         return await func(message)
                     return
                 await message.answer("Access Denied")
-            elif query:
-                if message and message.chat.type in ["supergroup", "group"]:
-                    return
-                await query.answer("Access Denied")
-
     return wrapper
-
 
 def perms_admins(func):
     @wraps(func)
-    async def wrapper(message: types.Message = None, query: types.CallbackQuery = None):
-        user_id = message.from_user.id if message else query.from_user.id
-        if user_id in admin_ids:
-            if message:
-                return await func(message)
-            elif query:
-                return await func(query=query)
+    async def wrapper(update: Union[types.Message, types.CallbackQuery]):
+        if isinstance(update, types.CallbackQuery):
+            message = update.message
+            query = update
         else:
-            if message:
-                if message and message.chat.type in ["supergroup", "group"]:
+            message = update
+            query = None
+        user_id = query.from_user.id if query else message.from_user.id 
+        if user_id in admin_ids:
+            if query:
+                return await func(query=query)
+            elif message:
+                return await func(message)
+        else:
+            if query:
+                if message:
+                    if message.chat.type in ["supergroup", "group"]:
+                        return
+                await query.answer("Access Denied")
+                logging.info(
+                    f"[QUERY] {message.from_user.first_name} {message.from_user.last_name}({message.from_user.id}) is not allowed to use this bot."
+                )
+            elif message:
+                if message.chat.type in ["supergroup", "group"]:
                     return
                 await message.answer("Access Denied")
                 logging.info(
                     f"[MSG] {message.from_user.first_name} {message.from_user.last_name}({message.from_user.id}) is not allowed to use this bot."
                 )
-            elif query:
-                if message and message.chat.type in ["supergroup", "group"]:
-                    return
-                await query.answer("Access Denied")
-                logging.info(
-                    f"[QUERY] {message.from_user.first_name} {message.from_user.last_name}({message.from_user.id}) is not allowed to use this bot."
-                )
-
     return wrapper
+
+
 class contextLock:
     lock = Lock()
 

@@ -123,6 +123,7 @@ def text_to_speech(text: str, output_file: str = "output.wav"):
             f.write(chunk)
 
 @dp.callback_query(lambda query: query.data == "register")
+@perms_allowed
 async def register_callback_handler(query: types.CallbackQuery):
     user_id = query.from_user.id
     user_name = query.from_user.full_name
@@ -137,6 +138,7 @@ async def get_bot_info():
     return mention
 
 @dp.message(CommandStart())
+@perms_allowed
 async def command_start_handler(message: Message) -> None:
     start_message = f"Welcome, <b>{message.from_user.full_name}</b>!"
     await message.answer(
@@ -147,6 +149,7 @@ async def command_start_handler(message: Message) -> None:
     )
 
 @dp.message(Command("reset"))
+@perms_allowed
 async def command_reset_handler(message: Message) -> None:
     if message.from_user.id in allowed_ids:
         if message.from_user.id in ACTIVE_CHATS:
@@ -159,6 +162,7 @@ async def command_reset_handler(message: Message) -> None:
             )
 
 @dp.message(Command("history"))
+@perms_allowed
 async def command_get_context_handler(message: Message) -> None:
     if message.from_user.id in allowed_ids:
         if message.from_user.id in ACTIVE_CHATS:
@@ -178,6 +182,7 @@ async def command_get_context_handler(message: Message) -> None:
             )
 
 @dp.message(Command("addglobalprompt"))
+@perms_allowed
 async def add_global_prompt_handler(message: Message):
     prompt_text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None  # Get the prompt text from the command arguments
     if prompt_text:
@@ -187,6 +192,7 @@ async def add_global_prompt_handler(message: Message):
         await message.answer("Please provide a prompt text to add.")
 
 @dp.message(Command("addprivateprompt"))
+@perms_allowed
 async def add_private_prompt_handler(message: Message):
     prompt_text = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None  # Get the prompt text from the command arguments
     if prompt_text:
@@ -196,6 +202,7 @@ async def add_private_prompt_handler(message: Message):
         await message.answer("Please provide a prompt text to add.")
 
 @dp.message(Command("pullmodel"))
+@perms_admins
 async def pull_model_handler(message: Message) -> None:
     model_name = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None  # Get the model name from the command arguments
     logging.info(f"Downloading {model_name}")
@@ -209,6 +216,7 @@ async def pull_model_handler(message: Message) -> None:
         await message.answer("Please provide a model name to pull.")
 
 @dp.callback_query(lambda query: query.data == "settings")
+@perms_allowed
 async def settings_callback_handler(query: types.CallbackQuery):
     await bot.send_message(
         chat_id=query.message.chat.id,
@@ -219,6 +227,7 @@ async def settings_callback_handler(query: types.CallbackQuery):
     )
 
 @dp.callback_query(lambda query: query.data == "switchllm")
+@perms_allowed
 async def switchllm_callback_handler(query: types.CallbackQuery):
     models = await model_list()
     switchllm_builder = InlineKeyboardBuilder()
@@ -243,6 +252,7 @@ async def switchllm_callback_handler(query: types.CallbackQuery):
     )
 
 @dp.callback_query(lambda query: query.data.startswith("model_"))
+@perms_admins
 async def model_callback_handler(query: types.CallbackQuery):
     global modelname
     global modelfamily
@@ -287,6 +297,7 @@ async def cancel_remove_handler(query: types.CallbackQuery):
     await query.message.edit_text("User removal cancelled.")
 
 @dp.callback_query(lambda query: query.data == "select_prompt")
+@perms_admins
 async def select_prompt_callback_handler(query: types.CallbackQuery):
     prompts = get_system_prompts(user_id=query.from_user.id)
     prompt_kb = InlineKeyboardBuilder()
@@ -302,12 +313,14 @@ async def select_prompt_callback_handler(query: types.CallbackQuery):
     )
 
 @dp.callback_query(lambda query: query.data.startswith("prompt_"))
+@perms_admins
 async def prompt_callback_handler(query: types.CallbackQuery):
     global selected_prompt_id
     selected_prompt_id = int(query.data.split("prompt_")[1])
     await query.answer(f"Selected prompt ID: {selected_prompt_id}")
 
 @dp.callback_query(lambda query: query.data == "delete_prompt")
+@perms_admins
 async def delete_prompt_callback_handler(query: types.CallbackQuery):
     prompts = get_system_prompts(user_id=query.from_user.id)
     delete_prompt_kb = InlineKeyboardBuilder()
@@ -323,12 +336,14 @@ async def delete_prompt_callback_handler(query: types.CallbackQuery):
     )
 
 @dp.callback_query(lambda query: query.data.startswith("delete_prompt_"))
+@perms_admins
 async def delete_prompt_confirm_handler(query: types.CallbackQuery):
     prompt_id = int(query.data.split("delete_prompt_")[1])
     delete_ystem_prompt(prompt_id)
     await query.answer(f"Deleted prompt ID: {prompt_id}")
 
 @dp.callback_query(lambda query: query.data == "delete_model")
+@perms_admins
 async def delete_model_callback_handler(query: types.CallbackQuery):
     models = await model_list()
     delete_model_kb = InlineKeyboardBuilder()
@@ -344,6 +359,7 @@ async def delete_model_callback_handler(query: types.CallbackQuery):
     )
 
 @dp.callback_query(lambda query: query.data.startswith("delete_model_"))
+@perms_admins
 async def delete_model_confirm_handler(query: types.CallbackQuery):
     modelname = query.data.split("delete_model_")[1]
     response = await manage_model("delete", modelname)

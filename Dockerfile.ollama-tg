@@ -8,15 +8,6 @@ ARG PYTHONPATH_=${APPHOMEDIR}
 
 WORKDIR /${APPHOMEDIR}
 
-COPY ./bot /${APPHOMEDIR}
-
-# Configure app home directory
-RUN \
-    addgroup -g "$USER_GID" "$USERNAME" \
-    && adduser --disabled-password -u "$USER_UID" -G "$USERNAME" -h /"$APPHOMEDIR" "$USERNAME" \
-    && mkdir -p /${APPHOMEDIR}/data \
-    && chown "$USERNAME:$USERNAME" -R /"$APPHOMEDIR"
-
 # Install dependency packages, upgrade pip and then install requirements
 RUN \
     apk add --no-cache gcc g++ \
@@ -29,6 +20,15 @@ RUN \
         typing \
         requests==2.32.3 \
     && apk del --no-cache gcc g++
+
+COPY ./bot /${APPHOMEDIR}
+
+# Configure app home directory
+RUN \
+    addgroup -g "$USER_GID" "$USERNAME" \
+    && adduser --disabled-password -u "$USER_UID" -G "$USERNAME" -h /"$APPHOMEDIR" "$USERNAME" \
+    && mkdir -p /${APPHOMEDIR}/data \
+    && chown "$USERNAME:$USERNAME" -R /"$APPHOMEDIR"
 
 USER ${USERNAME}
 
