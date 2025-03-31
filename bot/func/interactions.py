@@ -56,28 +56,22 @@ async def manage_model(action: str, model_name: str):
             logging.error(f"Unsupported model management action: {action}")
             return None
 
-def add_system_prompt(user_id, prompt, is_global):
+def add_system_prompt(user_id, prompt):
     conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
-    c.execute("INSERT INTO system_prompts (user_id, prompt, is_global) VALUES (?, ?, ?)",
-              (user_id, prompt, is_global))
+    c.execute("INSERT INTO system_prompts (user_id, prompt) VALUES (?, ?)",
+              (user_id, prompt))
     conn.commit()
     conn.close()
 
-def get_system_prompts(user_id=None, is_global=None):
+def get_system_prompts(user_id=None):
     conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     query = "SELECT * FROM system_prompts WHERE 1=1"
     params = []
-    
     if user_id is not None:
         query += " AND user_id = ?"
         params.append(user_id)
-    
-    if is_global is not None:
-        query += " AND is_global = ?"
-        params.append(is_global)
-    
     c.execute(query, params)
     prompts = c.fetchall()
     conn.close()
