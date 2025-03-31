@@ -6,7 +6,7 @@ from multiprocessing import Process, Queue
 from faster_whisper import WhisperModel
 import uuid
 
-app = FastAPI()
+app = FastAPI(title="Whisper STT Server", version="1.0")
 
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = logging.getLevelName(log_level_str)
@@ -63,3 +63,6 @@ async def transcribe_audio(file: Annotated[UploadFile, File(description="Audio f
         logging.error(f"Transcription failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

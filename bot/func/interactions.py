@@ -13,8 +13,7 @@ load_dotenv()
 token = os.getenv("TOKEN")
 allowed_ids = list(map(int, os.getenv("USER_IDS", "").split(",")))
 admin_ids = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
-ollama_base_url = os.getenv("OLLAMA_BASE_URL")
-ollama_port = os.getenv("OLLAMA_PORT", "11434")
+ollama_url = os.getenv("OLLAMA_URL")
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "0")
 allow_all_users_in_groups = bool(int(os.getenv("ALLOW_ALL_USERS_IN_GROUPS", "0")))
@@ -28,7 +27,7 @@ logging.basicConfig(level=log_level)
 
 async def manage_model(action: str, model_name: str):
     async with aiohttp.ClientSession() as session:
-        url = f"http://{ollama_base_url}:{ollama_port}/api/{action}"
+        url = f"{ollama_url}/api/{action}"
         
         if action == "pull":
             # Use the exact payload structure from the curl example
@@ -57,7 +56,7 @@ async def manage_model(action: str, model_name: str):
             return None
 
 def add_system_prompt(user_id, prompt, is_global):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("INSERT INTO system_prompts (user_id, prompt, is_global) VALUES (?, ?, ?)",
               (user_id, prompt, is_global))
@@ -65,7 +64,7 @@ def add_system_prompt(user_id, prompt, is_global):
     conn.close()
 
 def get_system_prompts(user_id=None, is_global=None):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     query = "SELECT * FROM system_prompts WHERE 1=1"
     params = []
@@ -84,7 +83,7 @@ def get_system_prompts(user_id=None, is_global=None):
     return prompts
 
 def delete_ystem_prompt(prompt_id):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("DELETE FROM system_prompts WHERE id = ?", (prompt_id,))
     conn.commit()
@@ -92,7 +91,7 @@ def delete_ystem_prompt(prompt_id):
 
 async def model_list():
     async with aiohttp.ClientSession() as session:
-        url = f"http://{ollama_base_url}:{ollama_port}/api/tags"
+        url = f"{ollama_url}/api/tags"
         async with session.get(url) as response:
             if response.status == 200:
                 data = await response.json()
@@ -103,7 +102,7 @@ async def model_list():
 async def generate(payload: dict, modelname: str, prompt: str):
     client_timeout = ClientTimeout(total=int(timeout))
     async with aiohttp.ClientSession(timeout=client_timeout) as session:
-        url = f"http://{ollama_base_url}:{ollama_port}/api/chat"
+        url = f"{ollama_url}/api/chat"
 
         # Prepare the payload according to Ollama API specification
         ollama_payload = {
@@ -146,7 +145,7 @@ async def generate(payload: dict, modelname: str, prompt: str):
             raise
 
 def load_allowed_ids_from_db():
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("SELECT id FROM users")
     user_ids = [row[0] for row in c.fetchall()]
@@ -156,7 +155,7 @@ def load_allowed_ids_from_db():
 
 
 def get_all_users_from_db():
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("SELECT id, name FROM users")
     users = c.fetchall()
@@ -164,7 +163,7 @@ def get_all_users_from_db():
     return users
 
 def remove_user_from_db(user_id):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("DELETE FROM users WHERE id = ?", (user_id,))
     removed = c.rowcount > 0

@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile.ollama-tg
     container_name: ollama-tg
     volumes:
-      - ollama-tg:/code/  # Mounting a volume for SQLite database
+      - ollama-tg:/code/data  # Mounting a volume for SQLite database
     restart: on-failure
     env_file:
       - ./.env

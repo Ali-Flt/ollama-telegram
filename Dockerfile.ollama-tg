@@ -14,6 +14,7 @@ COPY ./bot /${APPHOMEDIR}
 RUN \
     addgroup -g "$USER_GID" "$USERNAME" \
     && adduser --disabled-password -u "$USER_UID" -G "$USERNAME" -h /"$APPHOMEDIR" "$USERNAME" \
+    && mkdir -p /${APPHOMEDIR}/data \
     && chown "$USERNAME:$USERNAME" -R /"$APPHOMEDIR"
 
 # Install dependency packages, upgrade pip and then install requirements
@@ -31,4 +32,4 @@ RUN \
 
 USER ${USERNAME}
 
-CMD [ "python3", "-u", "run.py"]
+CMD ["python3", "-u", "run.py"]

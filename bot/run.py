@@ -62,7 +62,7 @@ CHAT_TYPE_GROUP = "group"
 CHAT_TYPE_SUPERGROUP = "supergroup"
 
 def init_db():
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY, name TEXT)''')
@@ -84,14 +84,14 @@ def init_db():
     conn.close()
 
 def register_user(user_id, user_name):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO users VALUES (?, ?)", (user_id, user_name))
     conn.commit()
     conn.close()
 
 def save_chat_message(user_id, role, content):
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("INSERT INTO chats (user_id, role, content) VALUES (?, ?, ?)",
               (user_id, role, content))
