@@ -16,5 +16,5 @@ RUN pip install --no-cache-dir \
     python-multipart==0.0.20 \
     ctranslate2==4.4.0
 # Copy the API server
-COPY ./whisper /app/
+COPY ./whisper_stt /app/
 CMD ["python3", "-u", "server.py"]

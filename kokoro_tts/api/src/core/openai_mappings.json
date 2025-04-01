@@ -1,0 +1,18 @@
+{
+    "models": {
+        "tts-1": "kokoro-v1_0",
+        "tts-1-hd": "kokoro-v1_0",
+        "kokoro": "kokoro-v1_0"
+    },
+    "voices": {
+        "alloy": "am_v0adam",
+        "ash": "af_v0nicole",
+        "coral": "bf_v0emma",
+        "echo": "af_v0bella",
+        "fable": "af_sarah",
+        "onyx": "bm_george",
+        "nova": "bf_isabella",
+        "sage": "am_michael",
+        "shimmer": "af_sky"
+    }
+}

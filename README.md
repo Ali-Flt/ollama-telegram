@@ -15,6 +15,7 @@
 - [x] Add option to send the bot an album of photos
 - [x] Filesystem cleaning
 - [x] User management improvement
+- [x] Add support for Kokoro TTS
 ## Prerequisites
 - [Telegram-Bot Token](https://core.telegram.org/bots#6-botfather)
 ## Installation (Build your own Docker image)

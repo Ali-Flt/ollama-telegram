@@ -8,6 +8,7 @@ import re
 load_dotenv()
 whisper_url = os.getenv("WHISPER_SERVICE_URL")
 tts_url = os.getenv("TTS_SERVICE_URL")
+tts_voice = os.getenv("TTS_VOICE", "af_bella")
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = logging.getLevelName(log_level_str)
 logging.basicConfig(level=log_level)
@@ -34,15 +35,29 @@ def speech_to_text(audio_path: str) -> dict:
         logging.error(f"Error communicating with whisper service: {e}")
         return None
 
-def text_to_speech(text: str, output_file: str = "output.wav"):
+def text_to_speech(text: str, output_file: str = "output.ogg"):
     text = clean_text_for_tts(text)
     logging.debug(f"Cleaned prompt: {text}")
-    response = requests.get(
-        f"{tts_url}/synthesize",
-        params={"text": text},
-        stream=True
-    )
-    response.raise_for_status()
-    with open(output_file, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+    if "piper" in tts_url:
+        response = requests.get(
+            f"{tts_url}/synthesize",
+            params={"text": text},
+            stream=True
+        )
+        response.raise_for_status()
+        with open(output_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+    elif "kokoro" in tts_url:
+        response = requests.post(
+            f"{tts_url}/v1/audio/speech",
+            json={
+                "model": "kokoro",  
+                "input": text,
+                "voice": tts_voice,
+                "response_format": "opus",  # Supported: mp3, wav, opus, flac
+                "speed": 1.0
+            }
+        )
+        with open(output_file, "wb") as f:
+            f.write(response.content)

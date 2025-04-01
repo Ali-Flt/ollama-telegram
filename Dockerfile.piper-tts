@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir fastapi \
 WORKDIR /app
 
 # Copy server script
-COPY ./tts /app/
+COPY ./piper_tts /app/
 
 # Create voice directory
 RUN mkdir -p /app/voices

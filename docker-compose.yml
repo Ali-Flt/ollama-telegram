@@ -28,7 +28,7 @@ services:
   faster-whisper:
     build:
       context: .
-      dockerfile: Dockerfile.faster-whisper
+      dockerfile: Dockerfile.faster-whisper-stt
     volumes:
       - whisper-models:/root/.cache/huggingface/hub
     deploy:
@@ -42,16 +42,37 @@ services:
     env_file:
       - ./.env
 
-  piper-tts:
+  # piper-tts:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.piper-tts
+  #   container_name: piper-tts
+  #   environment:
+  #     - PIPER_DATA_DIR=/app/voices
+  #   volumes:
+  #     - tts-voices:/app/voices
+  #   restart: on-failure
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   env_file:
+  #     - ./.env
+
+  kokoro-tts:
     build:
       context: .
-      dockerfile: Dockerfile.piper-tts
-    container_name: piper-tts
-    environment:
-      - PIPER_DATA_DIR=/app/voices
+      dockerfile: Dockerfile.kokoro-tts
     volumes:
-      - tts-voices:/app/voices
-    restart: on-failure
+      - ./kokoro_tts/api:/app/api
+    user: "1001:1001"  # Ensure container runs as UID 1001 (appuser)
+    environment:
+      - PYTHONPATH=/app:/app/api
+      - USE_GPU=true
+      - PYTHONUNBUFFERED=1
     deploy:
       resources:
         reservations:
@@ -59,10 +80,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    env_file:
-      - ./.env
 
 volumes:
   ollama-tg:
   whisper-models:
-  tts-voices:
+  # tts-voices:
