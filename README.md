@@ -22,18 +22,12 @@
     ```
     git clone https://github.com/Ali-Flt/ollama-telegram
     ```
-
 + Enter all values in .env.example
-
 + Rename .env.example -> .env
-
-+ Run ONE of the following docker compose commands to start:
 + To run ollama in docker container
   ```
   docker compose up --build -d
   ```
-
 ## Credits
 + [Ollama](https://github.com/jmorganca/ollama)
 + [Original ollama-telegram](https://github.com/ruecat/ollama-telegram)
-
