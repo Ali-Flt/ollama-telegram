@@ -308,7 +308,7 @@ async def model_callback_handler(query: types.CallbackQuery):
     await query.answer(f"Chosen model: {modelname}")
 
 @dp.callback_query(lambda query: query.data == "about")
-@perms_admins
+@perms_allowed
 async def about_callback_handler(query: types.CallbackQuery):
     dotenv_model = os.getenv("INITMODEL")
     global modelname
