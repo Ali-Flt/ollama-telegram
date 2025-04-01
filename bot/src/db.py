@@ -137,6 +137,8 @@ def remove_user_from_db(user_id):
     c = conn.cursor()
     c.execute("DELETE FROM users WHERE id = ?", (user_id,))
     removed = c.rowcount > 0
+    c.execute("DELETE FROM system_prompts WHERE user_id = ?", (user_id,))
+    c.execute("DELETE FROM chats WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
     return removed
