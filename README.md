@@ -28,9 +28,13 @@ Here's features that you get out of the box:
 - [ ] Add more API-related functions [System Prompt Editor, Ollama Version fetcher, etc.]
 - [ ] Redis DB integration
 - [ ] Update bot UI
+## This fork's progress
 - [x] Add voice message support via OpenAI Whisper
 - [x] Add speech to speech support via OpenAI Whisper and Piper TTS
-
+- [x] Fix permission issues
+- [x] Add option to send the bot an album of photos
+- [x] Filesystem cleaning
+- [x] User management improvement
 ## Prerequisites
 - [Telegram-Bot Token](https://core.telegram.org/bots#6-botfather)
 
