@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 # Install Python dependencies
 RUN pip install --no-cache-dir --no-deps piper-tts 
 RUN pip install --no-cache-dir fastapi \
+    python-dotenv==1.1.0 \
     "uvicorn[standard]" \
     piper-phonemize-cross \
     onnxruntime-gpu \

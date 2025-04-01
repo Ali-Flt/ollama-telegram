@@ -232,7 +232,7 @@ async def add_user_handler(message: Message):
     if user_id:
         if user_id not in allowed_ids:
             allowed_ids.append(user_id)
-            logging.info(f"Allowed IDs: {allowed_ids}")
+            logging.debug(f"Allowed IDs: {allowed_ids}")
             await message.answer("User added to the allowed list.")
         else:
             await message.answer("User already in the allowed list.")
@@ -543,7 +543,7 @@ async def ollama_request(message: types.Message, prompt: str = None, photos: lis
                 await bot.download_file(file.file_path, str(file_path))
                 result = speech_to_text(file_path)
             prompt = result.get('transcription', 'No transcription available')
-            logging.info(f"Voice prompt: {prompt}")
+            logging.debug(f"Voice prompt: {prompt}")
         messages = []
         system_prompt = get_selected_system_prompt(message.from_user.id)
         if system_prompt:

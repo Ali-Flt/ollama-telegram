@@ -5,7 +5,9 @@ import logging
 from multiprocessing import Process, Queue
 from faster_whisper import WhisperModel
 import uuid
+from dotenv import load_dotenv
 
+load_dotenv()
 app = FastAPI(title="Whisper STT Server", version="1.0")
 
 log_level_str = os.getenv("LOG_LEVEL", "INFO")

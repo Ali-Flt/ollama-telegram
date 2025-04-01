@@ -3,6 +3,7 @@ from requests.exceptions import RequestException
 from dotenv import load_dotenv
 import os
 import logging
+import re
 
 load_dotenv()
 whisper_url = os.getenv("WHISPER_SERVICE_URL")
@@ -10,6 +11,15 @@ tts_url = os.getenv("TTS_SERVICE_URL")
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = logging.getLevelName(log_level_str)
 logging.basicConfig(level=log_level)
+
+def clean_text_for_tts(text):
+    # Remove content inside <think>...</think> tags
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    # Remove special characters and emojis (excluding basic punctuation)
+    text = re.sub(r'[*_~`^{}\[\]<>|\\/#@+=%&$€£¥¢§¶•]', '', text)
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 def speech_to_text(audio_path: str) -> dict:
     try:
@@ -25,6 +35,8 @@ def speech_to_text(audio_path: str) -> dict:
         return None
 
 def text_to_speech(text: str, output_file: str = "output.wav"):
+    text = clean_text_for_tts(text)
+    logging.debug(f"Cleaned prompt: {text}")
     response = requests.get(
         f"{tts_url}/synthesize",
         params={"text": text},

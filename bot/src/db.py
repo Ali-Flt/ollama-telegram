@@ -92,7 +92,7 @@ def get_selected_system_prompt(user_id):
     c.execute("SELECT selected_prompt_id FROM users WHERE id = ?", (user_id,))
     selected_prompt_id = c.fetchone()
     selected_prompt_id = selected_prompt_id[0] if selected_prompt_id is not None else -1
-    logging.info(f"Selected prompt ID: {selected_prompt_id}")
+    logging.debug(f"Selected prompt ID: {selected_prompt_id}")
     conn.close()
     system_prompts = get_system_prompts(user_id=user_id)
     if system_prompts:

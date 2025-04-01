@@ -9,6 +9,7 @@ RUN apt-get update && \
 
 # Install faster-whisper with specific version for compatibility
 RUN pip install --no-cache-dir \
+    python-dotenv==1.1.0 \
     faster-whisper==1.1.1 \
     fastapi==0.115.12 \
     uvicorn==0.34.0 \

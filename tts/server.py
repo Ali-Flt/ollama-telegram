@@ -9,7 +9,9 @@ from pathlib import Path
 import wave
 import tempfile
 from pydub import AudioSegment
+from dotenv import load_dotenv
 
+load_dotenv()
 app = FastAPI(title="Piper TTS Server", version="1.0")
 
 log_level_str = os.getenv("LOG_LEVEL", "INFO")
