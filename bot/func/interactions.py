@@ -170,7 +170,7 @@ def remove_user_from_db(user_id):
 
 def perms_allowed(func):
     @wraps(func)
-    async def wrapper(update: Union[types.Message, types.CallbackQuery]):
+    async def wrapper(update: Union[types.Message, types.CallbackQuery], *args, **kwargs):
         if isinstance(update, types.CallbackQuery):
             message = update.message
             query = update
@@ -180,9 +180,9 @@ def perms_allowed(func):
         user_id = query.from_user.id if query else message.from_user.id
         if user_id in admin_ids or user_id in allowed_ids:
             if query:
-                return await func(query=query)
+                return await func(query, *args, **kwargs)
             elif message:
-                return await func(message)
+                return await func(message, *args, **kwargs)
         else: 
             if query:
                 if message:
@@ -192,14 +192,14 @@ def perms_allowed(func):
             if message:
                 if message.chat.type in ["supergroup", "group"]:
                     if allow_all_users_in_groups:
-                        return await func(message)
+                        return await func(message, *args, **kwargs)
                     return
                 await message.answer("Access Denied")
     return wrapper
 
 def perms_admins(func):
     @wraps(func)
-    async def wrapper(update: Union[types.Message, types.CallbackQuery]):
+    async def wrapper(update: Union[types.Message, types.CallbackQuery], *args, **kwargs):
         if isinstance(update, types.CallbackQuery):
             message = update.message
             query = update
@@ -209,9 +209,9 @@ def perms_admins(func):
         user_id = query.from_user.id if query else message.from_user.id 
         if user_id in admin_ids:
             if query:
-                return await func(query=query)
+                return await func(query, *args, **kwargs)
             elif message:
-                return await func(message)
+                return await func(message, *args, **kwargs)
         else:
             if query:
                 if message:

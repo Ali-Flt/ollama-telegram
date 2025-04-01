@@ -1,4 +1,4 @@
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, BaseMiddleware
 from aiogram.enums import ParseMode
 from aiogram.filters.command import Command, CommandStart
 from aiogram.types import Message
@@ -18,8 +18,10 @@ import sqlite3
 import os
 import requests
 from requests.exceptions import RequestException
-
-
+import json
+from abc import ABC
+from typing import Callable, Dict, Any, Awaitable
+        
 whisper_url = os.getenv("WHISPER_SERVICE_URL")
 tts_url = os.getenv("TTS_SERVICE_URL")
 bot = Bot(token=token)
@@ -52,12 +54,50 @@ commands = [
     types.BotCommand(command="addsystemprompt", description="Add a system prompt"),
 ]
 
-ACTIVE_CHATS = {}
-ACTIVE_CHATS_LOCK = contextLock()
 modelname = os.getenv("INITMODEL")
 mention = None
 CHAT_TYPE_GROUP = "group"
 CHAT_TYPE_SUPERGROUP = "supergroup"
+
+
+class AlbumMiddleware(BaseMiddleware, ABC):
+    """This middleware is for capturing media groups."""
+
+    album_data: dict = {}
+
+    def __init__(self, latency: int | float = 0.01):
+        """
+        You can provide custom latency to make sure
+        albums are handled properly in highload.
+        """
+        self.latency = latency
+        super().__init__()
+
+    async def __call__(
+        self,
+        handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]],
+        event: Message,
+        data: Dict[str, Any],
+    ) -> Any:
+        if not event.media_group_id:
+            return await handler(event, data)
+
+        try:
+            self.album_data[event.media_group_id].append(event)
+            return  # Tell aiogram to cancel handler for this group element
+        except KeyError:
+            self.album_data[event.media_group_id] = [event]
+            await asyncio.sleep(self.latency)
+
+            event.model_config["is_last"] = True
+            data["album"] = self.album_data[event.media_group_id]
+
+            result = await handler(event, data)
+
+            if event.media_group_id and event.model_config.get("is_last"):
+                del self.album_data[event.media_group_id]
+
+            return result
 
 def init_db():
     conn = sqlite3.connect('data/users.db')
@@ -69,6 +109,7 @@ def init_db():
                   user_id INTEGER,
                   role TEXT,
                   content TEXT,
+                  images TEXT,
                   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     c.execute('''CREATE TABLE IF NOT EXISTS system_prompts
@@ -79,8 +120,16 @@ def init_db():
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     conn.commit()
     conn.close()
+    
+def get_user_messages(user_id):
+    conn = sqlite3.connect('data/users.db')
+    c = conn.cursor()
+    c.execute("SELECT role, content, images FROM chats WHERE user_id = ? ORDER BY id", (user_id,))
+    messages = [{"role": role, "content": content, "images": json.loads(images) if images else []} for (role, content, images) in c.fetchall()]
+    conn.close()
+    return messages
 
-def delet_user_chats(user_id):
+def delete_user_chats(user_id):
     conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
     c.execute("DELETE FROM chats WHERE user_id = ?", (user_id,))
@@ -94,11 +143,11 @@ def register_user(user_id, user_name):
     conn.commit()
     conn.close()
 
-def save_chat_message(user_id, role, content):
+def save_chat_message(user_id, role, content, images=[]):
     conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
-    c.execute("INSERT INTO chats (user_id, role, content) VALUES (?, ?, ?)",
-              (user_id, role, content))
+    c.execute("INSERT INTO chats (user_id, role, content, images) VALUES (?, ?, ?, ?)",
+              (user_id, role, content, json.dumps(images)))
     conn.commit()
     conn.close()
 
@@ -156,7 +205,7 @@ async def command_start_handler(message: Message) -> None:
 @perms_allowed
 async def command_reset_handler(message: Message) -> None:
     user_id = message.from_user.id
-    delet_user_chats(user_id)
+    delete_user_chats(user_id)
     logging.info(f"Chat has been reset for {message.from_user.first_name}")
     await bot.send_message(
         chat_id=message.chat.id,
@@ -166,22 +215,23 @@ async def command_reset_handler(message: Message) -> None:
 @dp.message(Command("history"))
 @perms_allowed
 async def command_get_context_handler(message: Message) -> None:
-    if message.from_user.id in allowed_ids:
-        if message.from_user.id in ACTIVE_CHATS:
-            messages = ACTIVE_CHATS.get(message.chat.id)["messages"]
-            context = ""
-            for msg in messages:
-                context += f"*{msg['role'].capitalize()}*: {msg['content']}\n"
-            await bot.send_message(
-                chat_id=message.chat.id,
-                text=context,
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        else:
-            await bot.send_message(
-                chat_id=message.chat.id,
-                text="No chat history available for this user",
-            )
+    user_id = message.from_user.id
+    messages = get_user_messages(user_id)
+    if messages:
+        context = ""
+        for msg in messages:
+            context += f"*{msg['role'].capitalize()}*: {msg['content']}\n"
+        context = telegramify_markdown.markdownify(context)
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=context,
+            parse_mode="MarkdownV2"
+        )
+    else:
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text="No chat history available for this user",
+        )
 
 @dp.message(Command("addsystemprompt"))
 @perms_allowed
@@ -247,7 +297,6 @@ async def switchllm_callback_handler(query: types.CallbackQuery):
 @perms_admins
 async def model_callback_handler(query: types.CallbackQuery):
     global modelname
-    global modelfamily
     modelname = query.data.split("model_")[1]
     await query.answer(f"Chosen model: {modelname}")
 
@@ -366,15 +415,26 @@ async def delete_model_confirm_handler(query: types.CallbackQuery):
 
 @dp.message()
 @perms_allowed
-async def handle_message(message: types.Message):
+async def handle_message(message: types.Message, album: list[Message] = None):
     await get_bot_info()
+    photos = []
+    if album:
+        caption = None
+        for file in album:
+            caption = caption or file.caption
+            if file.photo:
+                photos.append(file.photo[-1])
+        if message.caption is None:
+            message = message.copy(update={"caption": caption})   
+    elif message.photo:
+        photos.append(message.photo[-1])
     if message.chat.type == "private":
-        await ollama_request(message)
+        await ollama_request(message, photos=photos)
         return
     if await is_mentioned_in_group_or_supergroup(message):
         thread = await collect_message_thread(message)
         prompt = format_thread_for_prompt(thread)
-        await ollama_request(message, prompt)
+        await ollama_request(message, prompt, photos)
 
 async def is_mentioned_in_group_or_supergroup(message: types.Message):
     if message.chat.type not in ["group", "supergroup"]:
@@ -413,60 +473,23 @@ def format_thread_for_prompt(thread):
     prompt += "History:"
     return prompt
 
-async def process_image(message):
-    image_base64 = ""
-    if message.content_type == "photo":
-        image_buffer = io.BytesIO()
-        await bot.download(message.photo[-1], destination=image_buffer)
-        image_base64 = base64.b64encode(image_buffer.getvalue()).decode("utf-8")
-    return image_base64
-
-async def add_prompt_to_active_chats(message, prompt, image_base64, modelname, system_prompt=None):
-    async with ACTIVE_CHATS_LOCK:
-        # Prepare the messages list
-        messages = []
-        
-        # Add system prompt if provided and not already present
-        if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt
-            })
-        else:
-            # Check if a system message already exists
-            messages.extend([msg for msg in ACTIVE_CHATS.get(message.from_user.id, {}).get('messages', []) if msg.get('role') == 'system'])
-        
-        # Add existing messages if the chat exists, excluding any existing system messages
-        if ACTIVE_CHATS.get(message.from_user.id):
-            messages.extend([msg for msg in ACTIVE_CHATS[message.from_user.id].get("messages", []) if msg.get('role') != 'system'])
-        
-        # Add the new user message
-        messages.append({
-            "role": "user",
-            "content": prompt,
-            "images": ([image_base64] if image_base64 else []),
-        })
-        
-        # Update or create the active chat
-        ACTIVE_CHATS[message.from_user.id] = {
-            "model": modelname,
-            "messages": messages,
-            "stream": True,
-        }
+async def process_images(photos):
+    images_base64 = []
+    if photos:
+        for photo in photos:
+            image_buffer = io.BytesIO()
+            await bot.download(photo, destination=image_buffer)
+            image_base64 = base64.b64encode(image_buffer.getvalue()).decode("utf-8")
+            images_base64.append(image_base64)
+    return images_base64
 
 async def handle_response(message, response_data, full_response):
-    full_response_stripped = full_response.strip()
-    if full_response_stripped == "":
+    if full_response == "":
         return
     if response_data.get("done"):
-        await send_response(message, full_response_stripped, response_data)
-        async with ACTIVE_CHATS_LOCK:
-            if ACTIVE_CHATS.get(message.from_user.id) is not None:
-                ACTIVE_CHATS[message.from_user.id]["messages"].append(
-                    {"role": "assistant", "content": full_response_stripped}
-                )
+        await send_response(message, full_response, response_data)
         logging.info(
-            f"[Response]: '{full_response_stripped}' for {message.from_user.first_name} {message.from_user.last_name}"
+            f"[Response]: '{full_response}' for {message.from_user.first_name} {message.from_user.last_name}"
         )
         return True
     return False
@@ -500,11 +523,11 @@ async def send_response(message, full_response_stripped, response_data):
                 parse_mode="MarkdownV2"
             )
 
-async def ollama_request(message: types.Message, prompt: str = None):
+async def ollama_request(message: types.Message, prompt: str = None, photos: list = []):
     try:
         full_response = ""
         await bot.send_chat_action(message.chat.id, "typing")
-        image_base64 = await process_image(message)
+        images_base64 = await process_images(photos)
         
         # Determine the prompt
         if prompt is None:
@@ -515,20 +538,23 @@ async def ollama_request(message: types.Message, prompt: str = None):
         conn = sqlite3.connect('data/users.db')
         c = conn.cursor()
         c.execute("SELECT selected_prompt_id FROM users WHERE id = ?", (message.from_user.id,))
-        selected_prompt_id = c.fetchall()[0][0]
+        selected_prompt_id = c.fetchone()
+        selected_prompt_id = selected_prompt_id[0] if selected_prompt_id is not None else -1
         logging.info(f"Selected prompt ID: {selected_prompt_id}")
         conn.close()
         system_prompts = get_system_prompts(user_id=message.from_user.id)
+        messages = []
         if system_prompts:
-            # Find the specific prompt by ID
             for sp in system_prompts:
                 if sp[0] == selected_prompt_id:
                     system_prompt = sp[2]
+                    messages.append({
+                        "role": "system",
+                        "content": system_prompt
+                        })
                     break
-            
             if system_prompt is None:
                 logging.warning(f"Selected prompt ID {selected_prompt_id} not found for user {message.from_user.id}")
-
         if message.content_type == "voice":
             voice = message.voice
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -538,20 +564,16 @@ async def ollama_request(message: types.Message, prompt: str = None):
                 result = transcribe_audio(file_path)
             prompt = result.get('transcription', 'No transcription available')
             logging.info(f"Voice prompt: {prompt}")
-            
-        # Save the user's message
-        save_chat_message(message.from_user.id, "user", prompt)
-
-        # Prepare the active chat with the system prompt
-        await add_prompt_to_active_chats(message, prompt, image_base64, modelname, system_prompt)
-        
+        save_chat_message(message.from_user.id, "user", prompt, images_base64)
+        messages.extend(get_user_messages(message.from_user.id))
         logging.info(
             f"[OllamaAPI]: Processing '{prompt}' for {message.from_user.first_name} {message.from_user.last_name}"
         )
-        
-        # Get the payload from active chats
-        payload = ACTIVE_CHATS.get(message.from_user.id)
-        
+        payload = {
+            "model": modelname,
+            "messages": messages,
+            "stream": True,
+        }
         # Generate response
         async for response_data in generate(payload, modelname, prompt):
             msg = response_data.get("message")
@@ -561,8 +583,9 @@ async def ollama_request(message: types.Message, prompt: str = None):
             full_response += chunk
 
             if any([c in chunk for c in ".\n!?"]) or response_data.get("done"):
-                if await handle_response(message, response_data, full_response):
-                    save_chat_message(message.from_user.id, "assistant", full_response)
+                full_response_stripped = full_response.strip()
+                if await handle_response(message, response_data, full_response_stripped):
+                    save_chat_message(message.from_user.id, "assistant", full_response_stripped)
                     break
 
     except Exception as e:
@@ -572,12 +595,14 @@ async def ollama_request(message: types.Message, prompt: str = None):
             text=f"Something went wrong: {str(e)}",
             parse_mode=ParseMode.HTML,
         )
-
+        
 async def main():
     init_db()
     allowed_ids = load_allowed_ids_from_db()
     print(f"allowed_ids: {allowed_ids}")
+    middleware = AlbumMiddleware()
     await bot.set_my_commands(commands)
+    dp.message.outer_middleware(middleware)
     await dp.start_polling(bot, skip_update=True)
 
 if __name__ == "__main__":
