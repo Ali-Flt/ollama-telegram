@@ -314,7 +314,7 @@ async def about_callback_handler(query: types.CallbackQuery):
     global modelname
     await bot.send_message(
         chat_id=query.message.chat.id,
-        text=f"<b>Your LLMs</b>\nCurrently using: <code>{modelname}</code>\nDefault in .env: <code>{dotenv_model}</code>\nThis project is under <a href='https://github.com/ruecat/ollama-telegram/blob/main/LICENSE'>MIT License.</a>\n<a href='https://github.com/ruecat/ollama-telegram'>Source Code</a>",
+        text=f"<b>Your LLMs</b>\nCurrently using: <code>{modelname}</code>\nDefault in .env: <code>{dotenv_model}</code>\nThis project is under <a href='https://github.com/Ali-Flt/ollama-telegram/blob/main/LICENSE'>MIT License.</a>\n<a href='https://github.com/Ali-Flt/ollama-telegram'>Source Code</a>",
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
