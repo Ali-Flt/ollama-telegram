@@ -9,22 +9,33 @@ import telegramify_markdown.customize as customize
 customize.strict_markdown = False
 import tempfile
 from pathlib import Path
-from func.interactions import *
 import asyncio
 import traceback
 import io
 import base64
-import sqlite3
 import os
-import requests
-from requests.exceptions import RequestException
-import json
 from abc import ABC
 from typing import Callable, Dict, Any, Awaitable
-        
-whisper_url = os.getenv("WHISPER_SERVICE_URL")
-tts_url = os.getenv("TTS_SERVICE_URL")
-default_prompt = os.getenv("DEFAULT_PROMPT", "You are a helpful AI voice assistant. We are interacting via voice so keep responses concise, no more than to a sentence or two unless the user specifies a longer response. Do not use special characters and only respond in plain text.")
+from typing import Union
+from functools import wraps
+from dotenv import load_dotenv
+import logging
+
+from src.db import init_db, register_user, delete_user_chats, get_user_messages, add_system_prompt,\
+    get_all_users_from_db, remove_user_from_db, get_system_prompts, update_selected_system_prompt,\
+        delete_system_prompt, save_chat_message, get_selected_system_prompt
+from src.ollama import model_list, manage_model, generate
+from src.voice import text_to_speech, speech_to_text
+
+load_dotenv()
+token = os.getenv("TOKEN")
+allowed_ids = list(map(int, os.getenv("USER_IDS", "").split(",")))
+admin_ids = list(map(int, os.getenv("ADMIN_IDS", "").split(",")))
+allow_all_users_in_groups = bool(int(os.getenv("ALLOW_ALL_USERS_IN_GROUPS", "0")))
+log_level_str = os.getenv("LOG_LEVEL", "INFO")
+log_level = logging.getLevelName(log_level_str)
+logging.basicConfig(level=log_level)
+
 bot = Bot(token=token)
 dp = Dispatcher()
 start_kb = InlineKeyboardBuilder()
@@ -33,7 +44,6 @@ settings_kb = InlineKeyboardBuilder()
 start_kb.row(
     types.InlineKeyboardButton(text="ℹ️ About", callback_data="about"),
     types.InlineKeyboardButton(text="⚙️ Settings", callback_data="settings"),
-    types.InlineKeyboardButton(text="📝 Register", callback_data="register"),
 )
 settings_kb.row(
     types.InlineKeyboardButton(text="🔄 Switch LLM", callback_data="switchllm"),
@@ -53,12 +63,75 @@ commands = [
     types.BotCommand(command="history", description="Look through messages"),
     types.BotCommand(command="pullmodel", description="Pull a model from Ollama"),
     types.BotCommand(command="addsystemprompt", description="Add a system prompt"),
+    types.BotCommand(command="adduser", description="Add a user to the allowed list"),
 ]
 
 modelname = os.getenv("INITMODEL")
 mention = None
 CHAT_TYPE_GROUP = "group"
 CHAT_TYPE_SUPERGROUP = "supergroup"
+
+def perms_allowed(func):
+    @wraps(func)
+    async def wrapper(update: Union[types.Message, types.CallbackQuery], *args, **kwargs):
+        if isinstance(update, types.CallbackQuery):
+            message = update.message
+            query = update
+        else:
+            message = update
+            query = None
+        user_id = query.from_user.id if query else message.from_user.id
+        if user_id in admin_ids or user_id in allowed_ids:
+            if query:
+                return await func(query, *args, **kwargs)
+            elif message:
+                return await func(message, *args, **kwargs)
+        else: 
+            if query:
+                if message:
+                    if message.chat.type in ["supergroup", "group"]:
+                        return
+                await query.answer("Access Denied")
+            if message:
+                if message.chat.type in ["supergroup", "group"]:
+                    if allow_all_users_in_groups:
+                        return await func(message, *args, **kwargs)
+                    return
+                await message.answer("Access Denied")
+    return wrapper
+
+def perms_admins(func):
+    @wraps(func)
+    async def wrapper(update: Union[types.Message, types.CallbackQuery], *args, **kwargs):
+        if isinstance(update, types.CallbackQuery):
+            message = update.message
+            query = update
+        else:
+            message = update
+            query = None
+        user_id = query.from_user.id if query else message.from_user.id 
+        if user_id in admin_ids:
+            if query:
+                return await func(query, *args, **kwargs)
+            elif message:
+                return await func(message, *args, **kwargs)
+        else:
+            if query:
+                if message:
+                    if message.chat.type in ["supergroup", "group"]:
+                        return
+                await query.answer("Access Denied")
+                logging.info(
+                    f"[QUERY] {message.from_user.first_name} {message.from_user.last_name}({message.from_user.id}) is not allowed to use this bot."
+                )
+            elif message:
+                if message.chat.type in ["supergroup", "group"]:
+                    return
+                await message.answer("Access Denied")
+                logging.info(
+                    f"[MSG] {message.from_user.first_name} {message.from_user.last_name}({message.from_user.id}) is not allowed to use this bot."
+                )
+    return wrapper
 
 
 class AlbumMiddleware(BaseMiddleware, ABC):
@@ -100,104 +173,6 @@ class AlbumMiddleware(BaseMiddleware, ABC):
 
             return result
 
-def init_db():
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY, name TEXT, selected_prompt_id INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS chats
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_id INTEGER,
-                  role TEXT,
-                  content TEXT,
-                  images TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  FOREIGN KEY (user_id) REFERENCES users(id))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS system_prompts
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_id INTEGER,
-                  prompt TEXT,
-                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  FOREIGN KEY (user_id) REFERENCES users(id))''')
-    conn.commit()
-    conn.close()
-
-def update_selected_system_prompt(user_id, selected_prompt_id):
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET selected_prompt_id = ? WHERE id = ?", (selected_prompt_id, user_id))
-    conn.commit()
-    conn.close()
-    
-def get_user_messages(user_id):
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("SELECT role, content, images FROM chats WHERE user_id = ? ORDER BY id", (user_id,))
-    messages = [{"role": role, "content": content, "images": json.loads(images) if images else []} for (role, content, images) in c.fetchall()]
-    conn.close()
-    return messages
-
-def delete_user_chats(user_id):
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE user_id = ?", (user_id,))
-    conn.commit()
-    conn.close()
-    
-def register_user(user_id, user_name):
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    if c.fetchall():
-        return
-    c.execute("INSERT OR REPLACE INTO users VALUES (?, ?, ?)", (user_id, user_name, -1))
-    conn.commit()
-    add_system_prompt(user_id, default_prompt)
-    c.execute("SELECT id FROM system_prompts WHERE user_id = ?", (user_id,))
-    selected_prompt_id = c.fetchall()[-1][0]
-    update_selected_system_prompt(user_id, selected_prompt_id)
-    conn.close()
-
-def save_chat_message(user_id, role, content, images=[]):
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO chats (user_id, role, content, images) VALUES (?, ?, ?, ?)",
-              (user_id, role, content, json.dumps(images)))
-    conn.commit()
-    conn.close()
-
-def transcribe_audio(audio_path: str) -> dict:
-    try:
-        with open(audio_path, 'rb') as f:
-            response = requests.post(
-                f"{whisper_url}/transcribe",
-                files={'file': (os.path.basename(audio_path), f)}
-            )
-        response.raise_for_status()
-        return response.json()
-    except RequestException as e:
-        print(f"Error communicating with whisper service: {e}")
-        return None
-
-def text_to_speech(text: str, output_file: str = "output.wav"):
-    response = requests.get(
-        f"{tts_url}/synthesize",
-        params={"text": text},
-        stream=True
-    )
-    response.raise_for_status()
-    with open(output_file, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
-
-@dp.callback_query(lambda query: query.data == "register")
-@perms_allowed
-async def register_callback_handler(query: types.CallbackQuery):
-    user_id = query.from_user.id
-    user_name = query.from_user.full_name
-    register_user(user_id, user_name)
-    await query.answer("You have been registered successfully!")
-
 async def get_bot_info():
     global mention
     if mention is None:
@@ -209,6 +184,7 @@ async def get_bot_info():
 @perms_allowed
 async def command_start_handler(message: Message) -> None:
     start_message = f"Welcome, <b>{message.from_user.full_name}</b>!"
+    register_user(message.from_user.id, message.from_user.full_name)
     await message.answer(
         start_message,
         parse_mode=ParseMode.HTML,
@@ -248,6 +224,22 @@ async def command_get_context_handler(message: Message) -> None:
             text="No chat history available for this user",
         )
 
+@dp.message(Command("adduser"))
+@perms_admins
+async def add_user_handler(message: Message):
+    global allowed_ids
+    user_id = int(message.text.split(maxsplit=1)[1]) if len(message.text.split()) > 1 else None
+    if user_id:
+        if user_id not in allowed_ids:
+            allowed_ids.append(user_id)
+            logging.info(f"Allowed IDs: {allowed_ids}")
+            await message.answer("User added to the allowed list.")
+        else:
+            await message.answer("User already in the allowed list.")
+    else:
+        await message.answer("Please provide a user ID to add.")
+
+        
 @dp.message(Command("addsystemprompt"))
 @perms_allowed
 async def add_system_prompt_handler(message: Message):
@@ -340,7 +332,9 @@ async def list_users_callback_handler(query: types.CallbackQuery):
 @dp.callback_query(lambda query: query.data.startswith("remove_"))
 @perms_admins
 async def remove_user_from_list_handler(query: types.CallbackQuery):
+    global allowed_ids
     user_id = int(query.data.split("_")[1])
+    allowed_ids = [id for id in allowed_ids if id != user_id]
     if remove_user_from_db(user_id):
         await query.answer(f"User {user_id} has been removed.")
         await query.message.edit_text(f"User {user_id} has been removed.")
@@ -395,7 +389,7 @@ async def delete_prompt_callback_handler(query: types.CallbackQuery):
 @perms_allowed
 async def delete_prompt_confirm_handler(query: types.CallbackQuery):
     prompt_id = int(query.data.split("delete_prompt_")[1])
-    delete_ystem_prompt(prompt_id)
+    delete_system_prompt(prompt_id)
     await query.answer(f"Prompt deleted.")
 
 @dp.callback_query(lambda query: query.data == "delete_model")
@@ -539,42 +533,24 @@ async def ollama_request(message: types.Message, prompt: str = None, photos: lis
         full_response = ""
         await bot.send_chat_action(message.chat.id, "typing")
         images_base64 = await process_images(photos)
-        
-        # Determine the prompt
         if prompt is None:
             prompt = message.text or message.caption
-
-        # Retrieve and prepare system prompt if selected
-        system_prompt = None
-        conn = sqlite3.connect('data/users.db')
-        c = conn.cursor()
-        c.execute("SELECT selected_prompt_id FROM users WHERE id = ?", (message.from_user.id,))
-        selected_prompt_id = c.fetchone()
-        selected_prompt_id = selected_prompt_id[0] if selected_prompt_id is not None else -1
-        logging.info(f"Selected prompt ID: {selected_prompt_id}")
-        conn.close()
-        system_prompts = get_system_prompts(user_id=message.from_user.id)
-        messages = []
-        if system_prompts:
-            for sp in system_prompts:
-                if sp[0] == selected_prompt_id:
-                    system_prompt = sp[2]
-                    messages.append({
-                        "role": "system",
-                        "content": system_prompt
-                        })
-                    break
-            if system_prompt is None:
-                logging.warning(f"Selected prompt ID {selected_prompt_id} not found for user {message.from_user.id}")
         if message.content_type == "voice":
             voice = message.voice
             with tempfile.TemporaryDirectory() as temp_dir:
                 file = await bot.get_file(voice.file_id)
                 file_path = Path(temp_dir) / f"{voice.file_unique_id}.ogg"                
                 await bot.download_file(file.file_path, str(file_path))
-                result = transcribe_audio(file_path)
+                result = speech_to_text(file_path)
             prompt = result.get('transcription', 'No transcription available')
             logging.info(f"Voice prompt: {prompt}")
+        messages = []
+        system_prompt = get_selected_system_prompt(message.from_user.id)
+        if system_prompt:
+            messages.append({
+                "role": "system",
+                "content": system_prompt
+                }) 
         save_chat_message(message.from_user.id, "user", prompt, images_base64)
         messages.extend(get_user_messages(message.from_user.id))
         logging.info(
@@ -608,9 +584,12 @@ async def ollama_request(message: types.Message, prompt: str = None, photos: lis
         )
         
 async def main():
+    global allowed_ids
     init_db()
-    allowed_ids = load_allowed_ids_from_db()
-    print(f"allowed_ids: {allowed_ids}")
+    db_users = get_all_users_from_db()
+    for id, _ in db_users:
+        if id not in allowed_ids:
+            allowed_ids.append(id)
     middleware = AlbumMiddleware()
     await bot.set_my_commands(commands)
     dp.message.outer_middleware(middleware)

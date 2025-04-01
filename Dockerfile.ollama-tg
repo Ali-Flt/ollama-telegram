@@ -32,4 +32,4 @@ RUN \
 
 USER ${USERNAME}
 
-CMD ["python3", "-u", "run.py"]
+CMD ["python3", "-u", "server.py"]
