@@ -24,6 +24,7 @@ from typing import Callable, Dict, Any, Awaitable
         
 whisper_url = os.getenv("WHISPER_SERVICE_URL")
 tts_url = os.getenv("TTS_SERVICE_URL")
+default_prompt = os.getenv("DEFAULT_PROMPT", "You are a helpful AI voice assistant. We are interacting via voice so keep responses concise, no more than to a sentence or two unless the user specifies a longer response. Do not use special characters and only respond in plain text.")
 bot = Bot(token=token)
 dp = Dispatcher()
 start_kb = InlineKeyboardBuilder()
@@ -120,6 +121,13 @@ def init_db():
                   FOREIGN KEY (user_id) REFERENCES users(id))''')
     conn.commit()
     conn.close()
+
+def update_selected_system_prompt(user_id, selected_prompt_id):
+    conn = sqlite3.connect('data/users.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET selected_prompt_id = ? WHERE id = ?", (selected_prompt_id, user_id))
+    conn.commit()
+    conn.close()
     
 def get_user_messages(user_id):
     conn = sqlite3.connect('data/users.db')
@@ -139,8 +147,15 @@ def delete_user_chats(user_id):
 def register_user(user_id, user_name):
     conn = sqlite3.connect('data/users.db')
     c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    if c.fetchall():
+        return
     c.execute("INSERT OR REPLACE INTO users VALUES (?, ?, ?)", (user_id, user_name, -1))
     conn.commit()
+    add_system_prompt(user_id, default_prompt)
+    c.execute("SELECT id FROM system_prompts WHERE user_id = ?", (user_id,))
+    selected_prompt_id = c.fetchall()[-1][0]
+    update_selected_system_prompt(user_id, selected_prompt_id)
     conn.close()
 
 def save_chat_message(user_id, role, content, images=[]):
@@ -357,11 +372,7 @@ async def select_prompt_callback_handler(query: types.CallbackQuery):
 @perms_allowed
 async def prompt_callback_handler(query: types.CallbackQuery):
     selected_prompt_id = int(query.data.split("prompt_")[1])
-    conn = sqlite3.connect('data/users.db')
-    c = conn.cursor()
-    c.execute("UPDATE users SET selected_prompt_id = ? WHERE id = ?", (selected_prompt_id, query.from_user.id))
-    conn.commit()
-    conn.close()
+    update_selected_system_prompt(query.from_user.id, selected_prompt_id)
     await query.answer(f"Prompt selected.")
 
 @dp.callback_query(lambda query: query.data == "delete_prompt")
