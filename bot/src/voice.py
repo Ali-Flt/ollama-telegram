@@ -35,7 +35,7 @@ def speech_to_text(audio_path: str) -> dict:
         logging.error(f"Error communicating with whisper service: {e}")
         return None
 
-def text_to_speech(text: str, output_file: str = "output.ogg"):
+def text_to_speech(text: str, output_file: str = "output.mp3"):
     text = clean_text_for_tts(text)
     logging.debug(f"Cleaned prompt: {text}")
     if "piper" in tts_url:
@@ -55,7 +55,7 @@ def text_to_speech(text: str, output_file: str = "output.ogg"):
                 "model": "kokoro",  
                 "input": text,
                 "voice": tts_voice,
-                "response_format": "opus",  # Supported: mp3, wav, opus, flac
+                "response_format": "mp3",  # Supported: mp3, wav, opus, flac
                 "speed": 1.0
             }
         )

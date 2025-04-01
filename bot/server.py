@@ -502,7 +502,7 @@ async def handle_response(message, response_data, full_response):
 async def send_response(message, full_response_stripped, response_data):
     if message.content_type == "voice":
         with tempfile.TemporaryDirectory() as temp_dir:
-            file_path = os.path.join(temp_dir, "response.ogg")
+            file_path = os.path.join(temp_dir, "response.mp3")
             text_to_speech(full_response_stripped, file_path)
             voice_msg = FSInputFile(file_path)
             await bot.send_voice(

@@ -19,7 +19,7 @@ log_level = logging.getLevelName(log_level_str)
 logging.basicConfig(level=log_level)
 
 cuda = os.getenv("USE_CUDA", "False")
-VOICE_MODEL = os.getenv("PIPER_VOICE", "en_US-lessac-medium")
+VOICE_MODEL = os.getenv("TTS_VOICE", "en_US-lessac-medium")
 VOICE_LANG_1 = VOICE_MODEL.split('_')[0]
 VOICE_LANG_2 = VOICE_MODEL.split('-')[0]
 VOICE_NAME = VOICE_MODEL.split('-')[1]
@@ -57,29 +57,28 @@ def tts_worker(output_path, voice_path, text):
         with open(output_path, 'w') as f:
             f.write(f"ERROR: {str(e)}")
 
-def convert_wav_to_ogg(input_wav_path, output_ogg_path=None):
-    if not os.path.exists(input_wav_path):
-        raise FileNotFoundError(f"Input file not found: {input_wav_path}")
-    if output_ogg_path is None:
-        base_path = os.path.splitext(input_wav_path)[0]
-        output_ogg_path = f"{base_path}.ogg"
+def convert_wav_to_mp3(input_path, output_path=None):
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    if output_path is None:
+        base_path = os.path.splitext(input_path)[0]
+        output_path = f"{base_path}.mp3"
     try:
-        audio = AudioSegment.from_wav(input_wav_path)
-        audio.export(output_ogg_path, format='ogg', codec="opus", bitrate="48k", parameters=['-strict', '-2'])
-        return output_ogg_path
+        audio = AudioSegment.from_wav(input_path)
+        audio.export(output_path, format='mp3', bitrate="48k")
+        return output_path
     except Exception as e:
-        raise Exception(f"Failed to convert WAV to OGG: {str(e)}")
-    
+        raise Exception(f"Failed to convert WAV to MP3: {str(e)}")
     
 def run_tts(voice_path, text):
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_wav = os.path.join(temp_dir, "output.wav")
-        temp_ogg = os.path.join(temp_dir, "output.ogg")
+        temp_mp3 = os.path.join(temp_dir, "output.mp3")
         p = Process(target=tts_worker, args=(temp_wav, voice_path, text))
         p.start()
         p.join()
-        convert_wav_to_ogg(temp_wav, temp_ogg)
-        with open(temp_ogg, 'rb') as f:
+        convert_wav_to_mp3(temp_wav, temp_mp3)
+        with open(temp_mp3, 'rb') as f:
             content = f.read()
         if content.startswith(b"ERROR:"):
             raise RuntimeError(content.decode('utf-8')[7:])
@@ -117,12 +116,12 @@ async def synthesize(text: str):
         raise HTTPException(status_code=400, detail="Text too long (max 1000 characters)")
     
     try:
-        ogg_buffer = run_tts(MODEL_PATH, text)
+        mp3_buffer = run_tts(MODEL_PATH, text)
         return StreamingResponse(
-            ogg_buffer,
-            media_type="audio/ogg",
+            mp3_buffer,
+            media_type="audio/mp3",
             headers={
-                "Content-Disposition": "attachment; filename=speech.ogg",
+                "Content-Disposition": "attachment; filename=speech.mp3",
                 "X-Voice-Model": VOICE_MODEL
             }
         )
