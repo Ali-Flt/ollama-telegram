@@ -56,43 +56,28 @@ def tts_worker(output_path, voice_path, text):
     except Exception as e:
         with open(output_path, 'w') as f:
             f.write(f"ERROR: {str(e)}")
-
-def convert_wav_to_mp3(input_path, output_path=None):
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"Input file not found: {input_path}")
-    if output_path is None:
-        base_path = os.path.splitext(input_path)[0]
-        output_path = f"{base_path}.mp3"
-    try:
-        audio = AudioSegment.from_wav(input_path)
-        audio.export(output_path, format='mp3', bitrate="48k")
-        return output_path
-    except Exception as e:
-        raise Exception(f"Failed to convert WAV to MP3: {str(e)}")
     
 def run_tts(voice_path, text):
     with tempfile.TemporaryDirectory() as temp_dir:
-        temp_wav = os.path.join(temp_dir, "output.wav")
-        temp_mp3 = os.path.join(temp_dir, "output.mp3")
-        p = Process(target=tts_worker, args=(temp_wav, voice_path, text))
+        temp_file = os.path.join(temp_dir, "output.mp3")
+        p = Process(target=tts_worker, args=(temp_file, voice_path, text))
         p.start()
         p.join()
-        convert_wav_to_mp3(temp_wav, temp_mp3)
-        with open(temp_mp3, 'rb') as f:
+        with open(temp_file, 'rb') as f:
             content = f.read()
-        if content.startswith(b"ERROR:"):
-            raise RuntimeError(content.decode('utf-8')[7:])
-        return io.BytesIO(content)
+    if content.startswith(b"ERROR:"):
+        raise RuntimeError(content.decode('utf-8')[7:])
+    return io.BytesIO(content)
 
-
-def create_wav_buffer(audio_data, sample_rate=22050):
-    """Create a proper WAV file buffer with correct headers"""
+def create_audio_buffer(raw_audio, sample_rate=22050):
     buffer = io.BytesIO()
-    with wave.open(buffer, 'wb') as wav_file:
-        wav_file.setnchannels(1)  # Mono
-        wav_file.setsampwidth(2)  # 16-bit
-        wav_file.setframerate(sample_rate)
-        wav_file.writeframes(audio_data)
+    audio_segment = AudioSegment(
+        data=raw_audio, 
+        sample_width=2, 
+        frame_rate=sample_rate, 
+        channels=1
+    )
+    audio_segment.export(buffer, format="mp3")
     buffer.seek(0)
     return buffer
 
@@ -103,8 +88,7 @@ def tts(voice_path, text):
         with wave.open(wav_io, "wb") as wav_file:
             model.synthesize(text, wav_file)
         raw_audio = wav_io.getvalue()
-    return create_wav_buffer(raw_audio, model.config.sample_rate)
-
+    return create_audio_buffer(raw_audio, model.config.sample_rate)
 
 @app.get("/synthesize")
 async def synthesize(text: str):
@@ -116,9 +100,9 @@ async def synthesize(text: str):
         raise HTTPException(status_code=400, detail="Text too long (max 1000 characters)")
     
     try:
-        mp3_buffer = run_tts(MODEL_PATH, text)
+        audio_buffer = run_tts(MODEL_PATH, text)
         return StreamingResponse(
-            mp3_buffer,
+            audio_buffer,
             media_type="audio/mp3",
             headers={
                 "Content-Disposition": "attachment; filename=speech.mp3",
