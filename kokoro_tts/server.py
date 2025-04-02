@@ -67,19 +67,19 @@ async def synthesize(text: str):
     if len(text) > 1000:
         raise HTTPException(status_code=400, detail="Text too long (max 1000 characters)")
     
-    # try:
-    audio_buffer = run_tts(text)
-    return StreamingResponse(
-        audio_buffer,
-        media_type="audio/mp3",
-        headers={
-            "Content-Disposition": "attachment; filename=speech.mp3",
-            "X-Voice-Model": 'KokoroV1'
-        }
-    )
-    # except Exception as e:
-    #     logging.error(f"Synthesis failed: {e}")
-    #     raise HTTPException(status_code=500, detail="Speech synthesis failed")
+    try:
+        audio_buffer = run_tts(text)
+        return StreamingResponse(
+            audio_buffer,
+            media_type="audio/mp3",
+            headers={
+                "Content-Disposition": "attachment; filename=speech.mp3",
+                "X-Voice-Model": 'KokoroV1'
+            }
+        )
+    except Exception as e:
+        logging.error(f"Synthesis failed: {e}")
+        raise HTTPException(status_code=500, detail="Speech synthesis failed")
 
 @app.get("/health")
 async def health_check():
