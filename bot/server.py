@@ -310,11 +310,10 @@ async def model_callback_handler(query: types.CallbackQuery):
 @dp.callback_query(lambda query: query.data == "about")
 @perms_allowed
 async def about_callback_handler(query: types.CallbackQuery):
-    dotenv_model = os.getenv("INITMODEL")
     global modelname
     await bot.send_message(
         chat_id=query.message.chat.id,
-        text=f"<b>Your LLMs</b>\nCurrently using: <code>{modelname}</code>\nDefault in .env: <code>{dotenv_model}</code>\nThis project is under <a href='https://github.com/Ali-Flt/ollama-telegram/blob/main/LICENSE'>MIT License.</a>\n<a href='https://github.com/Ali-Flt/ollama-telegram'>Source Code</a>",
+        text=f"<b>Your Friendly AI Assistant</b>\nSupports voice chat (for all models) and\nsending pictures (only for multi-modal models)\nCurrently using: <code>{modelname}</code>\nThis project is under <a href='https://github.com/Ali-Flt/ollama-telegram/blob/main/LICENSE'>MIT License.</a>\n<a href='https://github.com/Ali-Flt/ollama-telegram'>Source Code</a>",
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
