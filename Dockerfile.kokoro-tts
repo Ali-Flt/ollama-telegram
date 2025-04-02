@@ -1,67 +1,33 @@
-FROM --platform=$BUILDPLATFORM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04
-# Set non-interactive frontend
-ENV DEBIAN_FRONTEND=noninteractive
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 
-# Install Python and other dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-venv \
     espeak-ng \
-    espeak-ng-data \
-    git \
     libsndfile1 \
-    curl \
+    wget \
+    python3.9 \
+    python3-pip \
     ffmpeg \
-    g++ \
- && apt-get clean && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /usr/share/espeak-ng-data \
- && ln -s /usr/lib/*/espeak-ng-data/* /usr/share/espeak-ng-data/
+    && rm -rf /var/lib/apt/lists/*
 
-# Install UV using the installer script
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/ && \
-    mv /root/.local/bin/uvx /usr/local/bin/ 
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi \
+    python-dotenv==1.1.0 \
+    "uvicorn[standard]" \
+    kokoro>=0.9.2 \
+    soundfile \
+    requests \
+    pydub
 
-# Create non-root user and set up directories and permissions
-RUN useradd -m -u 1001 appuser && \
-    mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app
-    
-USER appuser
+# Create app directory
 WORKDIR /app
 
-# Copy dependency files
-COPY --chown=appuser:appuser kokoro_tts/pyproject.toml ./pyproject.toml
+# Copy server script
+COPY ./kokoro_tts /app/
 
-ENV PHONEMIZER_ESPEAK_PATH=/usr/bin \
-    PHONEMIZER_ESPEAK_DATA=/usr/share/espeak-ng-data \
-    ESPEAK_DATA_PATH=/usr/share/espeak-ng-data
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Install dependencies with GPU extras (using cache mounts)
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv --python 3.10 && \
-    uv sync --extra gpu
-
-# Copy project files including models
-COPY --chown=appuser:appuser kokoro_tts/api ./api
-COPY --chown=appuser:appuser kokoro_tts/web ./web
-COPY --chown=appuser:appuser kokoro_tts/docker/scripts/ ./
-RUN chmod +x ./entrypoint.sh
-
-
-# Set all environment variables in one go
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app:/app/api \
-    PATH="/app/.venv/bin:$PATH" \
-    UV_LINK_MODE=copy \
-    USE_GPU=true 
-
-ENV DOWNLOAD_MODEL=true
-# Download model if enabled
-RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-    python download_model.py --output api/src/models/v1_0; \
-    fi
-
-ENV DEVICE="gpu"
-# Run FastAPI server through entrypoint.sh
-CMD ["./entrypoint.sh"]
+CMD ["python3", "-u", "server.py"]

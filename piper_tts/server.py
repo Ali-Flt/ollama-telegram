@@ -18,49 +18,50 @@ log_level_str = os.getenv("LOG_LEVEL", "INFO")
 log_level = logging.getLevelName(log_level_str)
 logging.basicConfig(level=log_level)
 
-cuda = os.getenv("USE_CUDA", "False")
-VOICE_MODEL = os.getenv("TTS_VOICE", "en_US-lessac-medium")
-VOICE_LANG_1 = VOICE_MODEL.split('_')[0]
-VOICE_LANG_2 = VOICE_MODEL.split('-')[0]
-VOICE_NAME = VOICE_MODEL.split('-')[1]
-VOICE_STYLE = VOICE_MODEL.split('-')[-1]
-VOICE_MODEL += ".onnx"
-DATA_DIR = os.getenv("PIPER_DATA_DIR", "/app/voices")
-MODEL_PATH = Path(DATA_DIR) / VOICE_MODEL
-JSON_PATH = Path(DATA_DIR) / f"{VOICE_MODEL}.json"
+device = os.getenv("DEVICE", "cuda")
+use_cuda = True if device == "cuda" else False
+voice_model = os.getenv("TTS_VOICE", "en_US-lessac-medium")
+voice_lang_1 = voice_model.split('_')[0]
+voice_lang_2 = voice_model.split('-')[0]
+voice_name = voice_model.split('-')[1]
+voice_style = voice_model.split('-')[-1]
+voice_model += ".onnx"
+data_dir = os.getenv("PIPER_DATA_DIR", "/app/voices")
+model_path = Path(data_dir) / voice_model
+json_path = Path(data_dir) / f"{voice_model}.json"
 
 try:
-    if not (MODEL_PATH.exists() and JSON_PATH.exists()) :
-        logging.info(f"Downloading voice model {VOICE_MODEL}...")
-        MODEL_PATH.parent.mkdir(exist_ok=True)
+    if not (model_path.exists() and json_path.exists()) :
+        logging.info(f"Downloading voice model {voice_model}...")
+        model_path.parent.mkdir(exist_ok=True)
         import requests
-        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{VOICE_LANG_1}/{VOICE_LANG_2}/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}"
+        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{voice_lang_1}/{voice_lang_2}/{voice_name}/{voice_style}/{voice_model}"
         response = requests.get(url)
         response.raise_for_status()
-        with open(MODEL_PATH, "wb") as f:
+        with open(model_path, "wb") as f:
             f.write(response.content)
-        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{VOICE_LANG_1}/{VOICE_LANG_2}/{VOICE_NAME}/{VOICE_STYLE}/{VOICE_MODEL}.json"
+        url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{voice_lang_1}/{voice_lang_2}/{voice_name}/{voice_style}/{voice_model}.json"
         response = requests.get(url)
         response.raise_for_status()
-        with open(JSON_PATH, "wb") as f:
+        with open(json_path, "wb") as f:
             f.write(response.content)
 except Exception as e:
     logging.error(f"Failed to initialize voice model: {e}")
     raise
 
-def tts_worker(output_path, voice_path, text):
+def tts_worker(output_path, text):
     try:
-        audio_buffer = tts(voice_path, text)
+        audio_buffer = tts(text)
         with open(output_path, 'wb') as f:
             f.write(audio_buffer.getvalue())
     except Exception as e:
         with open(output_path, 'w') as f:
             f.write(f"ERROR: {str(e)}")
     
-def run_tts(voice_path, text):
+def run_tts(text):
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_file = os.path.join(temp_dir, "output.mp3")
-        p = Process(target=tts_worker, args=(temp_file, voice_path, text))
+        p = Process(target=tts_worker, args=(temp_file, text))
         p.start()
         p.join()
         with open(temp_file, 'rb') as f:
@@ -81,9 +82,8 @@ def create_audio_buffer(raw_audio, sample_rate=22050):
     buffer.seek(0)
     return buffer
 
-def tts(voice_path, text):
-    model = PiperVoice.load(voice_path, use_cuda=cuda)
-    raw_audio = io.BytesIO()
+def tts(text):
+    model = PiperVoice.load(model_path, use_cuda=use_cuda)
     with io.BytesIO() as wav_io:
         with wave.open(wav_io, "wb") as wav_file:
             model.synthesize(text, wav_file)
@@ -100,13 +100,13 @@ async def synthesize(text: str):
         raise HTTPException(status_code=400, detail="Text too long (max 1000 characters)")
     
     try:
-        audio_buffer = run_tts(MODEL_PATH, text)
+        audio_buffer = run_tts(text)
         return StreamingResponse(
             audio_buffer,
             media_type="audio/mp3",
             headers={
                 "Content-Disposition": "attachment; filename=speech.mp3",
-                "X-Voice-Model": VOICE_MODEL
+                "X-Voice-Model": voice_model
             }
         )
     except Exception as e:
@@ -118,7 +118,7 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "voice_model": VOICE_MODEL,
+        "voice_model": voice_model,
         "service": "Piper TTS"
     }
 

@@ -49,15 +49,12 @@ def text_to_speech(text: str, output_file: str = "output.mp3"):
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
     elif "kokoro" in tts_url:
-        response = requests.post(
-            f"{tts_url}/v1/audio/speech",
-            json={
-                "model": "kokoro",  
-                "input": text,
-                "voice": tts_voice,
-                "response_format": "mp3",  # Supported: mp3, wav, opus, flac
-                "speed": 1.0
-            }
+        response = requests.get(
+            f"{tts_url}/synthesize",
+            params={"text": text},
+            stream=True
         )
+        response.raise_for_status()
         with open(output_file, "wb") as f:
-            f.write(response.content)
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
