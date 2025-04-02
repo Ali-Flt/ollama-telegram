@@ -207,5 +207,4 @@ id_*
 users.db
 *.pt
 *.pth
-
-
+kokoro_tts/api/temp_files
