@@ -64,6 +64,7 @@ commands = [
     types.BotCommand(command="pullmodel", description="Pull a model from Ollama"),
     types.BotCommand(command="addsystemprompt", description="Add a system prompt"),
     types.BotCommand(command="adduser", description="Add a user to the allowed list"),
+    types.BotCommand(command="deluser", description="Remove a user from the allowed list"),
 ]
 
 modelname = os.getenv("INITMODEL")
@@ -223,6 +224,22 @@ async def command_get_context_handler(message: Message) -> None:
             chat_id=message.chat.id,
             text="No chat history available for this user",
         )
+
+@dp.message(Command("deluser"))
+@perms_admins
+async def add_user_handler(message: Message):
+    global allowed_ids
+    user_id = int(message.text.split(maxsplit=1)[1]) if len(message.text.split()) > 1 else None
+    if user_id:
+        if user_id in allowed_ids:
+            allowed_ids = [id for id in allowed_ids if id != user_id]
+            logging.debug(f"Allowed IDs: {allowed_ids}")
+            await message.answer("User removed from the allowed list.")
+            remove_user_from_db(user_id)
+        else:
+            await message.answer("User not found in the allowed list.")
+    else:
+        await message.answer("Please provide a user ID to add.")
 
 @dp.message(Command("adduser"))
 @perms_admins
