@@ -65,6 +65,14 @@ async def transcribe_audio(file: Annotated[UploadFile, File(description="Audio f
         logging.error(f"Transcription failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "Whisper STT"
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

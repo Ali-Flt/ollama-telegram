@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y ffmpeg python3.9 python3-pip git && \
+    apt-get install -y ffmpeg python3.9 python3-pip git curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Install faster-whisper with specific version for compatibility
@@ -15,6 +15,11 @@ RUN pip install --no-cache-dir \
     uvicorn==0.34.0 \
     python-multipart==0.0.20 \
     ctranslate2==4.4.0
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
 # Copy the API server
 COPY ./whisper_stt /app/
 CMD ["python3", "-u", "server.py"]
